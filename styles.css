@@ -1,0 +1,181 @@
+:root {
+    --space-black: #000000;
+    --nasa-blue: #0B3D91;
+    --nasa-red: #FC3D21;
+    --star-white: #FFFFFF;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: var(--space-black);
+    color: var(--star-white);
+    font-family: 'Arial', sans-serif;
+    overflow-x: hidden;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    border-bottom: 2px solid var(--nasa-red);
+}
+
+.tabs {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.tab {
+    padding: 10px 25px;
+    border: none;
+    border-radius: 5px;
+    background: var(--nasa-blue);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tab:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(11, 61, 145, 0.5);
+}
+
+.tab.active {
+    background: var(--nasa-red);
+}
+
+.tab-content {
+    display: none;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.asteroids-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    padding: 15px;
+}
+
+.asteroid-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 15px;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.5s ease-out;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.asteroid-card .danger {
+    color: #ff4444;
+    font-weight: bold;
+}
+
+.asteroid-card .safe {
+    color: #44ff44;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#map {
+    height: 500px;
+    width: 100%;
+    border-radius: 15px;
+    margin-top: 20px;
+    border: 2px solid var(--nasa-red);
+}
+
+.iss-info {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.loading {
+    text-align: center;
+    padding: 30px;
+    font-size: 1.2em;
+    color: var(--nasa-red);
+}
+
+/* 3D Orbit Styles */
+#three-container {
+    width: 100%;
+    height: 600px;
+    position: relative;
+    background: #000;
+    border-radius: 15px;
+    margin-top: 20px;
+}
+
+.orbit-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    gap: 10px;
+}
+
+.orbit-controls button {
+    padding: 8px 15px;
+    background: var(--nasa-blue);
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.orbit-controls button:hover {
+    background: var(--nasa-red);
+}
+
+/* Error Handling Styles */
+.error-box {
+    padding: 20px;
+    background: #220000;
+    border: 2px solid #ff4444;
+    border-radius: 10px;
+    margin: 20px;
+}
+
+.error-box button {
+    padding: 10px;
+    margin: 5px;
+    background: #4444ff;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+
+/* Stats.js Panel */
+.stats {
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: pointer;
+    opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+    .asteroids-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    #three-container {
+        height: 400px;
+    }
+}
