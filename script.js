@@ -77,6 +77,8 @@ function initISSMap() {
     setInterval(updateISS, 2000);
 }
 
+
+
 // 3D Visualization System
 function initThreeJS() {
     if (is3DInitialized) return;
