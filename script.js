@@ -1,7 +1,9 @@
-const API_KEY = '04kavYa0frT6y1VaMIQxdv8KEKrL4b3GWnb2TrzN';
+const API_KEY = '04kavYa0frT6y1VaMIQxdv8KEKrL4b3GWnb2TrzN'; // Replace with your NASA API key
 let map, issMarker;
-let scene, camera, renderer, controls, issMesh;
+let scene, camera, renderer, controls, earthMesh, issMesh, orbitLine;
 let rotateSystem = true;
+let is3DInitialized = false;
+let stats;
 
 // Tab Management
 function showTab(tabName) {
@@ -11,13 +13,13 @@ function showTab(tabName) {
     event.currentTarget.classList.add('active');
     
     if(tabName === 'iss' && !map) initISSMap();
-    if(tabName === 'orbit' && !renderer) initThreeJS();
+    if(tabName === 'orbit' && !is3DInitialized) initThreeJS();
     
-    // Resize Three.js canvas on tab switch
-    if(tabName === 'orbit' && renderer) {
-        camera.aspect = document.getElementById('three-container').clientWidth / 600;
-        camera.updateProjectionMatrix();
-        renderer.setSize(document.getElementById('three-container').clientWidth, 600);
+    if(tabName === 'orbit') {
+        window.addEventListener('resize', handle3DResize);
+        handle3DResize();
+    } else {
+        window.removeEventListener('resize', handle3DResize);
     }
 }
 
@@ -59,128 +61,6 @@ function displayAsteroids(asteroidData) {
     });
 }
 
-// 3D Visualization System with Debugging
-function initThreeJS() {
-    try {
-        // Check WebGL support
-        if (!WEBGL.isWebGLAvailable()) {
-            throw new Error('WebGL not supported');
-        }
-
-        // Scene setup
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(
-            75,
-            document.getElementById('three-container').clientWidth / 600,
-            0.1,
-            1000
-        );
-        
-        // Initialize renderer with error handling
-        try {
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                powerPreference: "high-performance"
-            });
-        } catch (error) {
-            console.error("WebGL initialization failed:", error);
-            show3DError();
-            return;
-        }
-
-        renderer.setSize(document.getElementById('three-container').clientWidth, 600);
-        document.getElementById('three-container').appendChild(renderer.domElement);
-
-        // Add debug stats
-        const stats = new Stats();
-        stats.showPanel(0);
-        document.getElementById('three-container').appendChild(stats.dom);
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 3, 5);
-        scene.add(directionalLight);
-
-        // Earth with fallback texture
-        const earthGeometry = new THREE.SphereGeometry(6.3, 64, 64);
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load(
-            'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg',
-            texture => {
-                const earthMaterial = new THREE.MeshPhongMaterial({
-                    map: texture,
-                    specular: 0x222222,
-                    shininess: 3
-                });
-                const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-                scene.add(earth);
-            },
-            undefined,
-            err => {
-                console.error("Error loading Earth texture:", err);
-                const earthMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-                const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-                scene.add(earth);
-            }
-        );
-
-        // Simple ISS model
-        const issGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.6);
-        const issMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-        issMesh = new THREE.Mesh(issGeometry, issMaterial);
-        scene.add(issMesh);
-
-        // Camera controls
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        camera.position.z = 45;
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-
-        // Start animation
-        animate();
-
-        // Add debug helper
-        const axesHelper = new THREE.AxesHelper(10);
-        scene.add(axesHelper);
-
-    } catch (error) {
-        console.error("3D initialization failed:", error);
-        show3DError();
-    }
-}
-
-function show3DError() {
-    const container = document.getElementById('three-container');
-    container.innerHTML = `
-        <div class="error-box">
-            <h3>🚨 3D Visualization Error</h3>
-            <p>Possible causes:</p>
-            <ul>
-                <li>WebGL not supported in your browser</li>
-                <li>Graphics card/driver issues</li>
-                <li>Resource loading blocked</li>
-            </ul>
-            <p>Check console for details and try:</p>
-            <button onclick="location.reload()">🔄 Reload Page</button>
-            <button onclick="toggleWebGL()">🎮 Toggle WebGL Mode</button>
-        </div>
-    `;
-}
-
-function toggleWebGL() {
-    if (renderer) {
-        renderer.dispose();
-        renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            powerPreference: renderer.getContext().getExtension('WEBGL_lose_context') 
-                ? "low-power" 
-                : "high-performance"
-        });
-    }
-}
-
 // ISS Tracker (2D Map)
 function initISSMap() {
     map = L.map('map').setView([0, 0], 2);
@@ -199,84 +79,150 @@ function initISSMap() {
 
 // 3D Visualization System
 function initThreeJS() {
-    // Scene setup
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, document.getElementById('three-container').clientWidth / 600, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(document.getElementById('three-container').clientWidth, 600);
-    document.getElementById('three-container').appendChild(renderer.domElement);
+    if (is3DInitialized) return;
+    
+    try {
+        // Check WebGL support
+        if (!WEBGL.isWebGLAvailable()) {
+            show3DError('WebGL is not supported in your browser');
+            return;
+        }
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5, 3, 5);
-    scene.add(directionalLight);
+        // Scene setup
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
 
-    // Earth
-    const earthGeometry = new THREE.SphereGeometry(6.3, 64, 64);
-    const earthTexture = new THREE.TextureLoader().load(
-        'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'
-    );
-    const earthMaterial = new THREE.MeshPhongMaterial({ 
-        map: earthTexture,
-        specular: 0x222222,
-        shininess: 3
-    });
-    const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-    scene.add(earth);
+        // Camera setup
+        const container = document.getElementById('three-container');
+        camera = new THREE.PerspectiveCamera(
+            75,
+            container.clientWidth / container.clientHeight,
+            0.1,
+            1000
+        );
+        camera.position.z = 45;
 
-    // ISS Model
-    const issGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.6);
-    const issMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-    issMesh = new THREE.Mesh(issGeometry, issMaterial);
-    scene.add(issMesh);
+        // Renderer setup
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
 
-    // Orbit Path
-    const orbitGeometry = new THREE.BufferGeometry();
-    const orbitLine = new THREE.Line(
-        orbitGeometry,
-        new THREE.LineBasicMaterial({ color: 0x00ff00 })
-    );
-    scene.add(orbitLine);
+        // Stats.js
+        stats = new Stats();
+        stats.showPanel(0);
+        container.appendChild(stats.dom);
 
-    // Camera Controls
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    camera.position.z = 45;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 3, 5);
+        scene.add(directionalLight);
 
-    // Animation Loop
-    animate();
+        // Earth
+        const earthGeometry = new THREE.SphereGeometry(6.371, 64, 64);
+        const textureLoader = new THREE.TextureLoader();
+        
+        textureLoader.load(
+            'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+            (texture) => {
+                const earthMaterial = new THREE.MeshPhongMaterial({
+                    map: texture,
+                    specular: 0x222222,
+                    shininess: 3
+                });
+                earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+                scene.add(earthMesh);
+            },
+            undefined,
+            (err) => {
+                console.error('Earth texture error:', err);
+                const earthMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+                earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+                scene.add(earthMesh);
+            }
+        );
+
+        // ISS Model
+        const issGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
+        const issMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        issMesh = new THREE.Mesh(issGeometry, issMaterial);
+        scene.add(issMesh);
+
+        // Orbit Path
+        const orbitGeometry = new THREE.BufferGeometry();
+        orbitGeometry.setAttribute(
+            'position',
+            new THREE.BufferAttribute(new Float32Array(), 3)
+        );
+        orbitLine = new THREE.Line(
+            orbitGeometry,
+            new THREE.LineBasicMaterial({ color: 0x00ff00 })
+        );
+        scene.add(orbitLine);
+
+        // Controls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Animation loop
+        animate();
+        is3DInitialized = true;
+
+    } catch (error) {
+        show3DError(`3D Initialization failed: ${error.message}`);
+    }
 }
 
 function updateOrbitVisualization(lat, lon, alt) {
-    // Convert geographic coordinates to 3D position
-    const radius = 6.3 + (alt / 1000); // Scale altitude for visualization
-    const phi = (90 - lat) * (Math.PI / 180);
-    const theta = (lon + 90) * (Math.PI / 180);
-    
+    if (!is3DInitialized) return;
+
+    // Convert geographic to 3D coordinates
+    const radius = 6.371 + (alt / 1000); // Earth radius + scaled altitude
+    const phi = THREE.MathUtils.degToRad(90 - lat);
+    const theta = THREE.MathUtils.degToRad(lon + 180);
+
     const x = -radius * Math.sin(phi) * Math.cos(theta);
     const y = radius * Math.cos(phi);
     const z = radius * Math.sin(phi) * Math.sin(theta);
 
-    // Update ISS position and orientation
+    // Update ISS position
     issMesh.position.set(x, y, z);
-    issMesh.lookAt(0, 0, 0);
+    issMesh.lookAt(0, 0, 0); // Orient ISS towards Earth center
 
     // Update orbit path
-    const orbitLine = scene.getObjectByProperty('type', 'Line');
-    const positions = orbitLine.geometry.attributes.position?.array || [];
+    const positions = orbitLine.geometry.attributes.position.array;
     const newPositions = new Float32Array([...positions, x, y, z].slice(-3000));
-    orbitLine.geometry.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
+    orbitLine.geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(newPositions, 3)
+    );
     orbitLine.geometry.attributes.position.needsUpdate = true;
+}
+
+function handle3DResize() {
+    if (!is3DInitialized) return;
+    
+    const container = document.getElementById('three-container');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
 function animate() {
     requestAnimationFrame(animate);
-    if (rotateSystem) scene.getObjectByProperty('type', 'Mesh').rotation.y += 0.0005;
-    controls.update();
-    renderer.render(scene, camera);
+    
+    if (rotateSystem && earthMesh) {
+        earthMesh.rotation.y += 0.0005;
+    }
+    
+    if (controls) controls.update();
+    if (renderer) renderer.render(scene, camera);
+    if (stats) stats.update();
 }
 
 function toggleRotation() {
@@ -284,7 +230,9 @@ function toggleRotation() {
 }
 
 function resetCamera() {
+    if (!is3DInitialized) return;
     camera.position.set(0, 0, 45);
+    controls.target.set(0, 0, 0);
     controls.update();
 }
 
@@ -303,9 +251,9 @@ async function updateISS() {
         document.getElementById('vel').textContent = data.velocity.toFixed(2);
 
         // Update 3D Visualization
-        if(renderer) updateOrbitVisualization(data.latitude, data.longitude, data.altitude);
+        updateOrbitVisualization(data.latitude, data.longitude, data.altitude);
     } catch (error) {
-        console.error('Error updating ISS position:', error);
+        console.error('ISS update error:', error);
     }
 }
 
@@ -316,10 +264,25 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Handle window resize
     window.addEventListener('resize', () => {
-        if(renderer) {
-            camera.aspect = document.getElementById('three-container').clientWidth / 600;
-            camera.updateProjectionMatrix();
-            renderer.setSize(document.getElementById('three-container').clientWidth, 600);
-        }
+        if(is3DInitialized) handle3DResize();
     });
 });
+
+// Error handling
+function show3DError(message) {
+    const container = document.getElementById('three-container');
+    container.innerHTML = `
+        <div class="error-box">
+            <h3>🚨 3D Visualization Error</h3>
+            <p>${message}</p>
+            <p>Possible solutions:</p>
+            <ul>
+                <li>Update graphics drivers</li>
+                <li>Enable WebGL in browser settings</li>
+                <li>Try Chrome/Firefox</li>
+                <li>Disable browser extensions</li>
+            </ul>
+            <button onclick="location.reload()">🔄 Reload Page</button>
+        </div>
+    `;
+}

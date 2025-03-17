@@ -11,7 +11,7 @@ body {
     background-color: var(--space-black);
     color: var(--star-white);
     font-family: 'Arial', sans-serif;
-    overflow-x: hidden;
+    min-height: 100vh;
 }
 
 header {
@@ -143,31 +143,23 @@ header {
     background: var(--nasa-red);
 }
 
-/* Error Handling Styles */
 .error-box {
     padding: 20px;
     background: #220000;
     border: 2px solid #ff4444;
     border-radius: 10px;
     margin: 20px;
+    color: white;
 }
 
 .error-box button {
-    padding: 10px;
-    margin: 5px;
-    background: #4444ff;
+    padding: 10px 20px;
+    background: var(--nasa-blue);
     border: none;
     color: white;
+    border-radius: 5px;
     cursor: pointer;
-}
-
-/* Stats.js Panel */
-.stats {
-    position: absolute;
-    top: 0;
-    left: 0;
-    cursor: pointer;
-    opacity: 0.9;
+    margin-top: 10px;
 }
 
 @media (max-width: 768px) {
