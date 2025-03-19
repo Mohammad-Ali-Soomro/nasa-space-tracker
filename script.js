@@ -129,12 +129,22 @@ function initThreeJS() {
     try {
         // Check WebGL support
         if (!WEBGL.isWebGLAvailable()) {
-            show3DError('WebGL is not supported in your browser');
+            initCanvasOrbitFallback();
             return;
         }
 
-        // Scene setup
+        // Scene setup with improved lighting
         scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000510); // Deep space blue
+        
+        // Add ambient light for better visibility
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        // Add directional light (sun)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(5, 3, 5);
+        scene.add(sunLight);
         
         // Add stars background
         createStarfield();
@@ -142,82 +152,73 @@ function initThreeJS() {
         // Camera with improved settings
         const container = document.getElementById('three-container');
         camera = new THREE.PerspectiveCamera(
-            60, // Wider FOV
+            60,
             container.clientWidth / container.clientHeight,
             0.1,
             1000
         );
-        camera.position.z = 30;
-
-        // Improved renderer
+        camera.position.set(0, 15, 30);
+        
+        // Improved renderer with better shadows
         renderer = new THREE.WebGLRenderer({ 
             antialias: true,
             powerPreference: "high-performance"
         });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
-
-        // Stats.js - with error handling
-        try {
-            if (typeof Stats !== 'undefined') {
-                stats = new Stats();
-                stats.showPanel(0);
-                container.appendChild(stats.dom);
-            }
-        } catch (statsError) {
-            console.warn('Stats.js not available:', statsError);
-            // Create a dummy stats object to prevent errors
-            stats = {
-                update: function() {} // Empty function
-            };
-        }
-
-        // Enhanced lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        directionalLight.position.set(5, 3, 5);
-        scene.add(directionalLight);
-
-        // Create Earth with clouds
-        createEarth();
-
-        // ISS Model - improved
-        createISS();
-
-        // Orbit Path with better material
-        createOrbitLine();
-
+        
         // Controls with better settings
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
         controls.rotateSpeed = 0.7;
         controls.zoomSpeed = 1.2;
-
+        controls.minDistance = 15;
+        controls.maxDistance = 50;
+        
+        // Create Earth with realistic textures
+        createEarth();
+        
+        // Create ISS with better model
+        createISS();
+        
+        // Create orbit line
+        createOrbitLine();
+        
         // Animation loop
         animate();
         is3DInitialized = true;
+        
+        // Add help tooltip
+        addHelpTooltip();
 
     } catch (error) {
+        console.error('3D initialization error:', error);
         show3DError(`3D Initialization failed: ${error.message}`);
+        initCanvasOrbitFallback();
     }
 }
 
 function createStarfield() {
+    // Create more stars with better distribution
     const starsGeometry = new THREE.BufferGeometry();
     const starsMaterial = new THREE.PointsMaterial({
         color: 0xffffff,
         size: 0.7,
-        transparent: true
+        transparent: true,
+        opacity: 0.8,
+        map: createStarTexture(),
+        blending: THREE.AdditiveBlending
     });
     
     const starsVertices = [];
     for (let i = 0; i < 5000; i++) {
-        const x = THREE.MathUtils.randFloatSpread(2000);
-        const y = THREE.MathUtils.randFloatSpread(2000);
-        const z = THREE.MathUtils.randFloatSpread(2000);
+        const x = THREE.MathUtils.randFloatSpread(500);
+        const y = THREE.MathUtils.randFloatSpread(500);
+        const z = THREE.MathUtils.randFloatSpread(500);
         starsVertices.push(x, y, z);
     }
     
@@ -226,53 +227,109 @@ function createStarfield() {
     scene.add(stars);
 }
 
+function createStarTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.2, 'rgba(240,240,255,1)');
+    gradient.addColorStop(0.4, 'rgba(220,220,255,0.8)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 32, 32);
+    
+    const texture = new THREE.Texture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
 function createEarth() {
-    const earthGeometry = new THREE.SphereGeometry(6.371, 64, 64);
+    // Load Earth textures
     const textureLoader = new THREE.TextureLoader();
     
-    // Earth texture with normal map for better detail
-    Promise.all([
-        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_clouds_1024.png')
-    ]).then(([earthMap, normalMap, specularMap, cloudsMap]) => {
-        // Earth material with normal mapping
-        const earthMaterial = new THREE.MeshPhongMaterial({
-            map: earthMap,
-            normalMap: normalMap,
-            specularMap: specularMap,
-            specular: 0x333333,
-            shininess: 15
-        });
-        earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-        scene.add(earthMesh);
-        
-        // Add cloud layer
-        const cloudsGeometry = new THREE.SphereGeometry(6.471, 64, 64);
-        const cloudsMaterial = new THREE.MeshPhongMaterial({
-            map: cloudsMap,
-            transparent: true,
-            opacity: 0.4
-        });
-        earthClouds = new THREE.Mesh(cloudsGeometry, cloudsMaterial);
-        scene.add(earthClouds);
-    }).catch(err => {
-        console.error('Earth texture error:', err);
-        const earthMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-        earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-        scene.add(earthMesh);
+    // Create Earth with realistic textures
+    const earthGeometry = new THREE.SphereGeometry(6, 64, 64);
+    
+    const earthMaterial = new THREE.MeshPhongMaterial({
+        map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg'),
+        bumpMap: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_normal_2048.jpg'),
+        bumpScale: 0.05,
+        specularMap: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_specular_2048.jpg'),
+        specular: new THREE.Color(0x333333),
+        shininess: 15
     });
+    
+    earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+    earthMesh.receiveShadow = true;
+    scene.add(earthMesh);
+    
+    // Add clouds layer
+    const cloudsGeometry = new THREE.SphereGeometry(6.1, 64, 64);
+    const cloudsMaterial = new THREE.MeshPhongMaterial({
+        map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_clouds_1024.png'),
+        transparent: true,
+        opacity: 0.4
+    });
+    
+    earthClouds = new THREE.Mesh(cloudsGeometry, cloudsMaterial);
+    scene.add(earthClouds);
+    
+    // Add atmosphere glow
+    const atmosphereGeometry = new THREE.SphereGeometry(6.2, 64, 64);
+    const atmosphereMaterial = new THREE.MeshPhongMaterial({
+        color: 0x0077ff,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.BackSide
+    });
+    
+    const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+    scene.add(atmosphere);
 }
 
 function createISS() {
     // Better ISS representation
-    const issGeometry = new THREE.ConeGeometry(0.3, 1, 4);
+    const issGeometry = new THREE.BoxGeometry(0.8, 0.3, 0.3);
     const issMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xff0000,
-        emissive: 0x440000
+        color: 0xdddddd,
+        emissive: 0x444444,
+        shininess: 100,
+        specular: 0x333333
     });
     issMesh = new THREE.Mesh(issGeometry, issMaterial);
+    
+    // Add solar panels
+    const panelGeometry = new THREE.BoxGeometry(1.5, 0.05, 0.5);
+    const panelMaterial = new THREE.MeshPhongMaterial({
+        color: 0x2299ff,
+        shininess: 100,
+        specular: 0x3333ff
+    });
+    
+    const leftPanel = new THREE.Mesh(panelGeometry, panelMaterial);
+    leftPanel.position.x = -1.2;
+    issMesh.add(leftPanel);
+    
+    const rightPanel = new THREE.Mesh(panelGeometry, panelMaterial);
+    rightPanel.position.x = 1.2;
+    issMesh.add(rightPanel);
+    
+    // Add glow effect
+    const glowGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff9900,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    issMesh.add(glow);
+    
     scene.add(issMesh);
 }
 
@@ -281,7 +338,7 @@ function createOrbitLine() {
     const orbitMaterial = new THREE.LineBasicMaterial({ 
         color: 0x00ffff,
         linewidth: 2,
-        opacity: 0.7,
+        opacity: 0.8,
         transparent: true
     });
     orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
@@ -292,7 +349,7 @@ function updateOrbitVisualization(lat, lon, alt) {
     if (!is3DInitialized) return;
 
     // Convert geographic to 3D coordinates
-    const radius = 6.371 + (alt / 1000); // Earth radius + scaled altitude
+    const radius = 6.371 + (alt / 1000) * 0.05; // Earth radius + scaled altitude
     const phi = THREE.MathUtils.degToRad(90 - lat);
     const theta = THREE.MathUtils.degToRad(lon + 180);
 
@@ -334,16 +391,17 @@ function handle3DResize() {
 function animate() {
     requestAnimationFrame(animate);
     
-    if (rotateSystem) {
-        if (earthMesh) earthMesh.rotation.y += 0.0005;
-        if (earthClouds) earthClouds.rotation.y += 0.0007; // Clouds rotate slightly faster
+    // Rotate Earth and clouds
+    if (rotateSystem && earthMesh) {
+        earthMesh.rotation.y += 0.0005;
+        if (earthClouds) earthClouds.rotation.y += 0.0007;
     }
     
-    if (stars) stars.rotation.y += 0.0001;
-    
+    // Update controls
     if (controls) controls.update();
-    if (renderer) renderer.render(scene, camera);
-    if (stats) stats.update();
+    
+    // Render scene
+    renderer.render(scene, camera);
 }
 
 function toggleRotation() {
@@ -351,10 +409,29 @@ function toggleRotation() {
 }
 
 function resetCamera() {
-    if (!is3DInitialized) return;
-    camera.position.set(0, 0, 45);
-    controls.target.set(0, 0, 0);
-    controls.update();
+    if (!camera) return;
+    camera.position.set(0, 15, 30);
+    camera.lookAt(0, 0, 0);
+    if (controls) controls.reset();
+}
+
+function addHelpTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'orbit-tooltip';
+    tooltip.innerHTML = `
+        <div class="tooltip-content">
+            <p>🖱️ Drag to rotate view</p>
+            <p>🖱️ Scroll to zoom in/out</p>
+            <p>⏯️ Toggle button pauses Earth rotation</p>
+        </div>
+    `;
+    document.getElementById('three-container').appendChild(tooltip);
+    
+    // Hide tooltip after 5 seconds
+    setTimeout(() => {
+        tooltip.style.opacity = '0';
+        setTimeout(() => tooltip.remove(), 1000);
+    }, 5000);
 }
 
 // ISS Position Updater
@@ -411,4 +488,122 @@ function show3DError(message) {
             <button onclick="location.reload()">🔄 Reload Page</button>
         </div>
     `;
+}
+
+// 2D Canvas Fallback for browsers without WebGL
+function initCanvasOrbitFallback() {
+    const container = document.getElementById('three-container');
+    container.innerHTML = '';
+    
+    // Create canvas element
+    const canvas = document.createElement('canvas');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    container.appendChild(canvas);
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Earth properties
+    const earthRadius = 100;
+    let issAngle = 0;
+    const issDistance = earthRadius * 1.2;
+    const issSize = 5;
+    const orbitHistory = [];
+    const maxOrbitPoints = 100;
+    
+    // Animation function
+    function animateCanvas() {
+        // Clear canvas
+        ctx.fillStyle = '#0a1a2a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw stars
+        for (let i = 0; i < 200; i++) {
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.random() + ')';
+            ctx.beginPath();
+            ctx.arc(
+                Math.random() * canvas.width,
+                Math.random() * canvas.height,
+                Math.random() * 1.5,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+        
+        // Draw Earth
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, earthRadius
+        );
+        gradient.addColorStop(0, '#1E90FF');
+        gradient.addColorStop(1, '#0000CD');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, earthRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw orbit path
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, issDistance, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Calculate ISS position
+        const issX = centerX + Math.cos(issAngle) * issDistance;
+        const issY = centerY + Math.sin(issAngle) * issDistance;
+        
+        // Store orbit history
+        orbitHistory.push({x: issX, y: issY});
+        if (orbitHistory.length > maxOrbitPoints) {
+            orbitHistory.shift();
+        }
+        
+        // Draw orbit history
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+        ctx.beginPath();
+        if (orbitHistory.length > 0) {
+            ctx.moveTo(orbitHistory[0].x, orbitHistory[0].y);
+            for (let i = 1; i < orbitHistory.length; i++) {
+                ctx.lineTo(orbitHistory[i].x, orbitHistory[i].y);
+            }
+        }
+        ctx.stroke();
+        
+        // Draw ISS
+        ctx.fillStyle = '#FF4500';
+        ctx.beginPath();
+        ctx.arc(issX, issY, issSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Add glow effect
+        const glowGradient = ctx.createRadialGradient(
+            issX, issY, 0,
+            issX, issY, issSize * 3
+        );
+        glowGradient.addColorStop(0, 'rgba(255, 69, 0, 0.8)');
+        glowGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
+        
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(issX, issY, issSize * 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Update ISS position for next frame
+        issAngle += 0.01;
+        
+        requestAnimationFrame(animateCanvas);
+    }
+    
+    // Start animation
+    animateCanvas();
+    
+    // Add message about fallback mode
+    const fallbackMsg = document.createElement('div');
+    fallbackMsg.className = 'fallback-message';
+    fallbackMsg.textContent = '⚠️ Using 2D canvas fallback mode (WebGL not available)';
+    container.appendChild(fallbackMsg);
 }
