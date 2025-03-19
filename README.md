@@ -45,3 +45,21 @@ Experience the tracker live:
 1. Clone the repository:
 ```bash
 git clone https://github.com/Mohammad-Ali-Soomro/nasa-space-tracker.git
+```
+
+## Setup & API Key 🔑
+
+This project uses NASA's APIs which require an API key. To run the project:
+
+1. Get a free API key from [NASA's API portal](https://api.nasa.gov/)
+2. When you first open the application, you'll be prompted to enter your API key
+3. The key will be stored locally in your browser and not shared
+
+Alternatively, you can add your API key as a URL parameter when first loading the page:
+```
+https://your-github-pages-url.com/?api_key=YOUR_NASA_API_KEY
+```
+
+The key will be stored locally and removed from the URL immediately.
+
+**Note:** If you don't provide an API key, the application will use NASA's DEMO_KEY which has strict rate limits.

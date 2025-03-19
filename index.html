@@ -59,5 +59,18 @@
         <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
         <script src="script.js"></script>
     </div>
+    <div id="api-key-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>NASA API Key Required</h2>
+            <p>This application uses NASA's APIs which require an API key.</p>
+            <p>You can get a free API key at <a href="https://api.nasa.gov/" target="_blank">https://api.nasa.gov/</a></p>
+            <form id="api-key-form">
+                <input type="text" id="api-key-input" placeholder="Enter your NASA API key">
+                <button type="submit">Save Key</button>
+            </form>
+            <p class="small">Your API key will be stored locally on your device and not shared.</p>
+        </div>
+    </div>
 </body>
 </html>

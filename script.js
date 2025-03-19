@@ -21,7 +21,53 @@ const WEBGL = {
     }
 };
 
-const API_KEY = '04kavYa0frT6y1VaMIQxdv8KEKrL4b3GWnb2TrzN'; // Replace with your NASA API key
+// Function to get API key from environment variables or local storage
+function getApiKey() {
+    // For local development: Check if stored in localStorage
+    const storedKey = localStorage.getItem('nasa_api_key');
+    if (storedKey) return storedKey;
+    
+    // For production: Check if it's in URL parameters (for first-time setup)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramKey = urlParams.get('api_key');
+    
+    if (paramKey) {
+        // Store in localStorage and remove from URL
+        localStorage.setItem('nasa_api_key', paramKey);
+        // Remove the parameter from URL to avoid exposing the key
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return paramKey;
+    }
+    
+    // If no key is found, use a default NASA DEMO_KEY or prompt user
+    return promptForApiKey();
+}
+
+// Function to prompt user for API key if not found
+function promptForApiKey() {
+    const defaultKey = 'DEMO_KEY'; // NASA's demo key with rate limits
+    
+    // Check if we've already shown the prompt
+    if (localStorage.getItem('api_key_prompted')) {
+        return defaultKey;
+    }
+    
+    const userKey = prompt(
+        "Please enter your NASA API key. You can get one for free at https://api.nasa.gov/. " +
+        "This will be stored locally and not shared.",
+        defaultKey
+    );
+    
+    if (userKey && userKey !== defaultKey) {
+        localStorage.setItem('nasa_api_key', userKey);
+        localStorage.setItem('api_key_prompted', 'true');
+        return userKey;
+    }
+    
+    localStorage.setItem('api_key_prompted', 'true');
+    return defaultKey;
+}
+
 let map, issMarker;
 let scene, camera, renderer, controls, earthMesh, issMesh, orbitLine;
 let rotateSystem = true;
@@ -56,7 +102,7 @@ async function fetchAsteroids() {
         const endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         
         const response = await fetch(
-            `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDate}&end_date=${endDate}&api_key=${API_KEY}`
+            `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDate}&end_date=${endDate}&api_key=${getApiKey()}`
         );
         const data = await response.json();
         displayAsteroids(data.near_earth_objects);
@@ -464,6 +510,39 @@ async function updateISS(positionCallback) {
 document.addEventListener('DOMContentLoaded', () => {
     fetchAsteroids();
     if(window.location.hash) showTab(window.location.hash.substring(1));
+    
+    // API key modal handling
+    const modal = document.getElementById('api-key-modal');
+    const closeModal = document.querySelector('.close-modal');
+    const apiKeyForm = document.getElementById('api-key-form');
+    
+    // Show modal if no API key is stored
+    if (!localStorage.getItem('nasa_api_key') && !localStorage.getItem('api_key_prompted')) {
+        modal.style.display = 'flex';
+    }
+    
+    // Close modal when clicking X
+    if (closeModal) {
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+            localStorage.setItem('api_key_prompted', 'true');
+        });
+    }
+    
+    // Handle form submission
+    if (apiKeyForm) {
+        apiKeyForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const apiKey = document.getElementById('api-key-input').value.trim();
+            if (apiKey) {
+                localStorage.setItem('nasa_api_key', apiKey);
+                localStorage.setItem('api_key_prompted', 'true');
+                modal.style.display = 'none';
+                // Reload data with new API key
+                fetchAsteroids();
+            }
+        });
+    }
     
     // Handle window resize
     window.addEventListener('resize', () => {
