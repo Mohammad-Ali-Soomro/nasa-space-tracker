@@ -1,9 +1,35 @@
+const WEBGL = {
+    isWebGLAvailable: function() {
+        try {
+            const canvas = document.createElement('canvas');
+            return !!(window.WebGLRenderingContext && 
+                (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+        } catch (e) {
+            return false;
+        }
+    },
+    isWebGL2Available: function() {
+        try {
+            const canvas = document.createElement('canvas');
+            return !!(window.WebGL2RenderingContext && canvas.getContext('webgl2'));
+        } catch (e) {
+            return false;
+        }
+    },
+    getWebGLErrorMessage: function() {
+        return 'Your browser does not support WebGL';
+    }
+};
+
 const API_KEY = '04kavYa0frT6y1VaMIQxdv8KEKrL4b3GWnb2TrzN'; // Replace with your NASA API key
 let map, issMarker;
 let scene, camera, renderer, controls, earthMesh, issMesh, orbitLine;
 let rotateSystem = true;
 let is3DInitialized = false;
 let stats;
+let earthClouds, stars;
+const orbitPoints = [];
+const MAX_ORBIT_POINTS = 500;
 
 // Tab Management
 function showTab(tabName) {
@@ -78,7 +104,6 @@ function initISSMap() {
 }
 
 
-
 // 3D Visualization System
 function initThreeJS() {
     if (is3DInitialized) return;
@@ -92,84 +117,66 @@ function initThreeJS() {
 
         // Scene setup
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
-
-        // Camera setup
+        
+        // Add stars background
+        createStarfield();
+        
+        // Camera with improved settings
         const container = document.getElementById('three-container');
         camera = new THREE.PerspectiveCamera(
-            75,
+            60, // Wider FOV
             container.clientWidth / container.clientHeight,
             0.1,
             1000
         );
-        camera.position.z = 45;
+        camera.position.z = 30;
 
-        // Renderer setup
+        // Improved renderer
         renderer = new THREE.WebGLRenderer({ 
             antialias: true,
             powerPreference: "high-performance"
         });
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
 
-        // Stats.js
-        stats = new Stats();
-        stats.showPanel(0);
-        container.appendChild(stats.dom);
+        // Stats.js - with error handling
+        try {
+            if (typeof Stats !== 'undefined') {
+                stats = new Stats();
+                stats.showPanel(0);
+                container.appendChild(stats.dom);
+            }
+        } catch (statsError) {
+            console.warn('Stats.js not available:', statsError);
+            // Create a dummy stats object to prevent errors
+            stats = {
+                update: function() {} // Empty function
+            };
+        }
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040);
+        // Enhanced lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
         scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
         directionalLight.position.set(5, 3, 5);
         scene.add(directionalLight);
 
-        // Earth
-        const earthGeometry = new THREE.SphereGeometry(6.371, 64, 64);
-        const textureLoader = new THREE.TextureLoader();
-        
-        textureLoader.load(
-            'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-            (texture) => {
-                const earthMaterial = new THREE.MeshPhongMaterial({
-                    map: texture,
-                    specular: 0x222222,
-                    shininess: 3
-                });
-                earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-                scene.add(earthMesh);
-            },
-            undefined,
-            (err) => {
-                console.error('Earth texture error:', err);
-                const earthMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-                earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-                scene.add(earthMesh);
-            }
-        );
+        // Create Earth with clouds
+        createEarth();
 
-        // ISS Model
-        const issGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
-        const issMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-        issMesh = new THREE.Mesh(issGeometry, issMaterial);
-        scene.add(issMesh);
+        // ISS Model - improved
+        createISS();
 
-        // Orbit Path
-        const orbitGeometry = new THREE.BufferGeometry();
-        orbitGeometry.setAttribute(
-            'position',
-            new THREE.BufferAttribute(new Float32Array(), 3)
-        );
-        orbitLine = new THREE.Line(
-            orbitGeometry,
-            new THREE.LineBasicMaterial({ color: 0x00ff00 })
-        );
-        scene.add(orbitLine);
+        // Orbit Path with better material
+        createOrbitLine();
 
-        // Controls
+        // Controls with better settings
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
+        controls.dampingFactor = 0.1;
+        controls.rotateSpeed = 0.7;
+        controls.zoomSpeed = 1.2;
 
         // Animation loop
         animate();
@@ -178,6 +185,89 @@ function initThreeJS() {
     } catch (error) {
         show3DError(`3D Initialization failed: ${error.message}`);
     }
+}
+
+function createStarfield() {
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.7,
+        transparent: true
+    });
+    
+    const starsVertices = [];
+    for (let i = 0; i < 5000; i++) {
+        const x = THREE.MathUtils.randFloatSpread(2000);
+        const y = THREE.MathUtils.randFloatSpread(2000);
+        const z = THREE.MathUtils.randFloatSpread(2000);
+        starsVertices.push(x, y, z);
+    }
+    
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+    stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
+}
+
+function createEarth() {
+    const earthGeometry = new THREE.SphereGeometry(6.371, 64, 64);
+    const textureLoader = new THREE.TextureLoader();
+    
+    // Earth texture with normal map for better detail
+    Promise.all([
+        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/planets/earth_clouds_1024.png')
+    ]).then(([earthMap, normalMap, specularMap, cloudsMap]) => {
+        // Earth material with normal mapping
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            map: earthMap,
+            normalMap: normalMap,
+            specularMap: specularMap,
+            specular: 0x333333,
+            shininess: 15
+        });
+        earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earthMesh);
+        
+        // Add cloud layer
+        const cloudsGeometry = new THREE.SphereGeometry(6.471, 64, 64);
+        const cloudsMaterial = new THREE.MeshPhongMaterial({
+            map: cloudsMap,
+            transparent: true,
+            opacity: 0.4
+        });
+        earthClouds = new THREE.Mesh(cloudsGeometry, cloudsMaterial);
+        scene.add(earthClouds);
+    }).catch(err => {
+        console.error('Earth texture error:', err);
+        const earthMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+        earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earthMesh);
+    });
+}
+
+function createISS() {
+    // Better ISS representation
+    const issGeometry = new THREE.ConeGeometry(0.3, 1, 4);
+    const issMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff0000,
+        emissive: 0x440000
+    });
+    issMesh = new THREE.Mesh(issGeometry, issMaterial);
+    scene.add(issMesh);
+}
+
+function createOrbitLine() {
+    const orbitGeometry = new THREE.BufferGeometry();
+    const orbitMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x00ffff,
+        linewidth: 2,
+        opacity: 0.7,
+        transparent: true
+    });
+    orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+    scene.add(orbitLine);
 }
 
 function updateOrbitVisualization(lat, lon, alt) {
@@ -194,15 +284,23 @@ function updateOrbitVisualization(lat, lon, alt) {
 
     // Update ISS position
     issMesh.position.set(x, y, z);
-    issMesh.lookAt(0, 0, 0); // Orient ISS towards Earth center
-
-    // Update orbit path
-    const positions = orbitLine.geometry.attributes.position.array;
-    const newPositions = new Float32Array([...positions, x, y, z].slice(-3000));
-    orbitLine.geometry.setAttribute(
-        'position',
-        new THREE.BufferAttribute(newPositions, 3)
-    );
+    issMesh.lookAt(0, 0, 0);
+    
+    // Store orbit points with limit
+    orbitPoints.push(new THREE.Vector3(x, y, z));
+    if (orbitPoints.length > MAX_ORBIT_POINTS) {
+        orbitPoints.shift();
+    }
+    
+    // Update orbit line
+    const positions = new Float32Array(orbitPoints.length * 3);
+    for (let i = 0; i < orbitPoints.length; i++) {
+        positions[i * 3] = orbitPoints[i].x;
+        positions[i * 3 + 1] = orbitPoints[i].y;
+        positions[i * 3 + 2] = orbitPoints[i].z;
+    }
+    
+    orbitLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     orbitLine.geometry.attributes.position.needsUpdate = true;
 }
 
@@ -218,9 +316,12 @@ function handle3DResize() {
 function animate() {
     requestAnimationFrame(animate);
     
-    if (rotateSystem && earthMesh) {
-        earthMesh.rotation.y += 0.0005;
+    if (rotateSystem) {
+        if (earthMesh) earthMesh.rotation.y += 0.0005;
+        if (earthClouds) earthClouds.rotation.y += 0.0007; // Clouds rotate slightly faster
     }
+    
+    if (stars) stars.rotation.y += 0.0001;
     
     if (controls) controls.update();
     if (renderer) renderer.render(scene, camera);
