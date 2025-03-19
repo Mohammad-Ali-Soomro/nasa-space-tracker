@@ -92,15 +92,33 @@ function initISSMap() {
     map = L.map('map').setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     
-    issMarker = L.marker([0, 0], {
-        icon: L.icon({
-            iconUrl: 'https://img.icons8.com/color/48/iss.png',
-            iconSize: [40, 40]
-        })
+    // Enhanced ISS marker with custom icon and pulsing effect
+    const issIcon = L.icon({
+        iconUrl: 'https://img.icons8.com/color/48/iss.png',
+        iconSize: [48, 48],
+        iconAnchor: [24, 24],
+        className: 'iss-icon-pulse'
+    });
+    
+    issMarker = L.marker([0, 0], { icon: issIcon }).addTo(map);
+    
+    // Add a circular highlight under the ISS
+    const issCircle = L.circle([0, 0], {
+        color: '#ff4500',
+        fillColor: '#ff4500',
+        fillOpacity: 0.2,
+        radius: 300000, // 300km radius
+        className: 'iss-highlight-pulse'
     }).addTo(map);
     
-    updateISS();
-    setInterval(updateISS, 2000);
+    // Update both the marker and circle
+    const updateISSPosition = (lat, lon) => {
+        issMarker.setLatLng([lat, lon]);
+        issCircle.setLatLng([lat, lon]);
+    };
+    
+    updateISS(updateISSPosition);
+    setInterval(() => updateISS(updateISSPosition), 2000);
 }
 
 
@@ -340,14 +358,19 @@ function resetCamera() {
 }
 
 // ISS Position Updater
-async function updateISS() {
+async function updateISS(positionCallback) {
     try {
         const response = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
         const data = await response.json();
         
         // Update 2D Map
-        issMarker.setLatLng([data.latitude, data.longitude]);
-        map.setView([data.latitude, data.longitude]);
+        if (positionCallback) {
+            positionCallback(data.latitude, data.longitude);
+        } else if (issMarker) {
+            issMarker.setLatLng([data.latitude, data.longitude]);
+        }
+        
+        if (map) map.setView([data.latitude, data.longitude]);
         document.getElementById('lat').textContent = data.latitude.toFixed(4);
         document.getElementById('lon').textContent = data.longitude.toFixed(4);
         document.getElementById('alt').textContent = data.altitude.toFixed(2);

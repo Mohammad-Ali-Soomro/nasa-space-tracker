@@ -401,6 +401,28 @@ header p {
     box-shadow: var(--space-glow), 0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* ISS Marker Animation */
+.iss-icon-pulse {
+    animation: issPulse 2s infinite;
+    transform-origin: center center;
+    filter: drop-shadow(0 0 8px rgba(255, 69, 0, 0.8));
+}
+
+.iss-highlight-pulse {
+    animation: circleOpacity 3s infinite alternate;
+}
+
+@keyframes issPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes circleOpacity {
+    0% { opacity: 0.3; }
+    100% { opacity: 0.7; }
+}
+
 @media (max-width: 768px) {
     header h1 {
         font-size: 2.5rem;
