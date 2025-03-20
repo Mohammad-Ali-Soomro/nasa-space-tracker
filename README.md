@@ -1,6 +1,6 @@
 # NASA Space Tracker 🚀
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue?style=for-the-badge)](https://mohammad-ali-soomro.github.io/nasa-space-tracker/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue?style=for-the-badge)](https://lambent-llama-ef5d44.netlify.app/)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 A real-time space tracking web application using NASA APIs with 3D visualization capabilities.
@@ -38,7 +38,7 @@ A real-time space tracking web application using NASA APIs with 3D visualization
 ## Live Demo 🌐
 
 Experience the tracker live:  
-[https://mohammad-ali-soomro.github.io/nasa-space-tracker/](https://mohammad-ali-soomro.github.io/nasa-space-tracker/)
+[https://mohammad-ali-soomro.github.io/nasa-space-tracker/](https://lambent-llama-ef5d44.netlify.app/)
 
 ## Installation 💻
 
